@@ -1,0 +1,170 @@
+Description: >
+    Khine Wai
+    This is template deploy SecurityGroup,ALB, ASG.
+
+Parameters:
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+    
+    InstanceImageName:
+        Type: String
+        Description: Image Name for Instance
+
+    InstanceType:
+        Type: String
+        Description: Instance Type
+
+    InstanceProfileRole:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+        Type: String
+
+Resources:
+   ## Security Group for ALB
+   ## inbound : allow port 80 from anywhere
+   ## outbount : allow port 80 
+    LBSecGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Allow http to our load balancer
+            VpcId:
+              Fn::ImportValue:
+                !Sub ${EnvironmentName}-VPCID
+            SecurityGroupIngress:
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
+            SecurityGroupEgress:
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
+      
+    ## Security Group for EC2
+    ## inbound : allow port 80 from ALB
+    ## outbound : allow all ports
+    WebServerSecGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+          GroupDescription: Allow http to our hosts only 80 port from ALB
+          VpcId:
+            Fn::ImportValue:
+              !Sub ${EnvironmentName}-VPCID
+          SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            SourceSecurityGroupId: !Ref LBSecGroup
+          SecurityGroupEgress:
+          - IpProtocol: tcp
+            FromPort: 0
+            ToPort: 65535
+            CidrIp: 0.0.0.0/0
+
+    ## Instance Profile Role
+    ProfileWithRolesForOurApp:
+      Type: AWS::IAM::InstanceProfile
+      Properties: 
+        Roles: 
+          - !Ref InstanceProfileRole
+    
+    ## Launch Configuration 
+    ## Install Apache and Web App
+    WebAppLaunchConfig:
+      Type: AWS::AutoScaling::LaunchConfiguration
+      Properties:
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            sudo apt-get update -y
+            sudo apt-get install unzip awscli -y
+            sudo apt-get install apache2 -y
+            sudo systemctl start apache2.service
+            cd /var/www/html
+            sudo aws s3 cp s3://udacity-demo-1/udacity.zip .
+            unzip -o udacity.zip
+        ImageId: !Ref InstanceImageName
+        IamInstanceProfile: 
+          Ref : ProfileWithRolesForOurApp
+        SecurityGroups:
+        - Ref: WebServerSecGroup
+        InstanceType: !Ref InstanceType
+        BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: '10'
+
+    ## AutoScaling
+    ## Provision at Private Subnets
+    ## minimum size: 4
+    ## maximum size: 5
+    WebAppGroup: 
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Properties:
+        VPCZoneIdentifier: 
+        - Fn::ImportValue:
+            !Sub ${EnvironmentName}-PRIV-NETS         
+        LaunchConfigurationName: 
+          Ref: WebAppLaunchConfig
+        TargetGroupARNs:
+          - !Ref WebAppTargetGroup
+        MinSize: "4"
+        MaxSize: "5"
+    
+    ## ALB
+    ## Provision at Public Subnets
+    WebAppLB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties: 
+        Subnets: 
+          - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+          - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
+        SecurityGroups: 
+          - Ref: LBSecGroup
+
+    Listener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties: 
+        DefaultActions: 
+          - Type: forward
+            TargetGroupArn: !Ref 'WebAppTargetGroup'
+        LoadBalancerArn: !Ref WebAppLB
+        Port: '80'
+        Protocol: HTTP
+    
+    ALBListnerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties: 
+        Actions: 
+          - Type: forward
+            TargetGroupArn: !Ref 'WebAppTargetGroup'
+        Conditions: 
+          - Field : path-pattern
+            Values: [/]
+        ListenerArn: !Ref 'Listener'
+        Priority: 1
+  
+    ## TargetGroup with Health check
+    WebAppTargetGroup:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 10
+        HealthCheckPath: /
+        HealthCheckProtocol: HTTP
+        HealthCheckTimeoutSeconds: 8
+        HealthyThresholdCount: 2
+        Port: 80
+        Protocol: HTTP
+        UnhealthyThresholdCount: 5
+        VpcId: 
+          Fn::ImportValue:
+            Fn::Sub: "${EnvironmentName}-VPCID"
+
+## Output DNS Name of ALB
+Outputs:
+  LoadBalancerDNSURL:
+    Description: The DNSName of load balancer
+    Value: !Join [ "", [ "http://", !GetAtt [ WebAppLB,DNSName ]]]
+    Export:
+          Name: !Sub ${EnvironmentName}-DNS-URL

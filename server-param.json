@@ -1,0 +1,19 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "UdacityCFPJ"
+    },
+    {
+        "ParameterKey" : "InstanceType",
+        "ParameterValue" : "t3.medium"
+    },
+    {
+        "ParameterKey": "InstanceProfileRole",
+        "ParameterValue": "S3ReadOnlyRole"
+    },
+    {
+        "ParameterKey": "InstanceImageName",
+        "ParameterValue": "ami-0f2dd5fc989207c82"
+
+    }
+]
