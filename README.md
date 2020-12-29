@@ -1,4 +1,4 @@
-# cloudformation-deploy-web-servers
+# Web-Apps-Cloudformation
 Deploy a High-Availability Web App using CloudFormation
 
 ![alt text](https://github.com/KhineWai710/cloudformation-deploy-web-servers/blob/main/High_Availability_Web_App.png)
