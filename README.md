@@ -1,5 +1,9 @@
 # cloudformation-deploy-web-servers
 Deploy a High-Availability Web App using CloudFormation
+
+Application can be check here.
+http://serve-webap-1akckqfmanmfc-1654206399.ap-northeast-1.elb.amazonaws.com/
+
 ![alt text](https://github.com/KhineWai710/cloudformation-deploy-web-servers/blob/main/High_Availability_Web_App.png)
 
 ## How to run
