@@ -22,7 +22,7 @@ Parameters:
 Resources:
    ## Security Group for ALB
    ## inbound : allow port 80 from anywhere
-   ## outbount : allow port 80 
+   ## outbound : allow port 80 
     LBSecGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
